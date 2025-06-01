@@ -29,6 +29,7 @@
     "mailersend": "^2.6.0",
     "mongoose": "^8.2.0",
     "morgan": "^1.10.0",
+    "multer": "^2.0.0",
     "qrcode": "^1.5.4",
     "resend": "^4.5.1"
   },

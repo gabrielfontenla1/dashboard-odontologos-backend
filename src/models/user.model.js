@@ -19,6 +19,13 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  phone: {
+    type: String,
+    required: function() {
+      return this.role === 'doctor';
+    },
+    trim: true
+  },
   role: {
     type: String,
     enum: ['admin', 'doctor', 'staff'],
@@ -28,12 +35,30 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  photo: {
+    type: String,
+    default: null // URL o path de la foto
+  },
   // Doctor specific fields
   specialization: {
     type: [String],
     default: [],
     required: function() {
       return this.role === 'doctor';
+    }
+  },
+  primarySpecialization: {
+    type: String,
+    required: false, // Opcional, puede no estar definido
+    validate: {
+      validator: function(value) {
+        // Si se define primarySpecialization, debe estar en la lista de specialization
+        if (value && this.specialization && this.specialization.length > 0) {
+          return this.specialization.includes(value);
+        }
+        return true; // Si no hay valor o no hay especializations, es válido
+      },
+      message: 'La especialidad principal debe estar incluida en la lista de especialidades'
     }
   },
   licenseNumber: {
@@ -51,9 +76,11 @@ const userSchema = new mongoose.Schema({
   availability: {
     type: Map,
     of: {
-      start: String,
-      end: String,
-      isAvailable: Boolean
+      isAvailable: Boolean,
+      schedules: [{
+        start: String,
+        end: String
+      }]
     },
     default: new Map()
   }

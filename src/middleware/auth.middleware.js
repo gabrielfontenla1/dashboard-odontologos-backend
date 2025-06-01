@@ -13,6 +13,18 @@ exports.protect = async (req, res, next) => {
       return res.status(401).json({ message: 'Not authorized to access this route' });
     }
 
+    // Check for magic token in development
+    if (process.env.NODE_ENV === 'development' && token === process.env.MAGIC_TOKEN) {
+      // Create a mock admin user for magic token
+      req.user = {
+        _id: 'magic_user_id',
+        email: 'magic@dev.com',
+        name: 'Magic Dev User',
+        role: 'admin'
+      };
+      return next();
+    }
+
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = await User.findById(decoded.id).select('-password');

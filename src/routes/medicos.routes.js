@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/user.model');
 const { protect, authorize } = require('../middleware/auth.middleware');
+const upload = require('../middleware/upload.middleware');
+const path = require('path');
+const fs = require('fs');
 
 // Get all doctors (public route for landing page)
 router.get('/public', async (req, res) => {
@@ -9,7 +12,7 @@ router.get('/public', async (req, res) => {
     const doctors = await User.find({ 
       role: 'doctor', 
       active: true 
-    }).select('name specialization licenseNumber experience email');
+    }).select('name specialization primarySpecialization licenseNumber experience email phone photo availability');
     res.json(doctors);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -104,6 +107,98 @@ router.get('/:id/availability', protect, async (req, res) => {
         res.json({
             message: 'Doctor availability endpoint - To be implemented'
         });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Upload doctor photo
+router.post('/:id/photo', protect, authorize('admin'), upload.single('photo'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No se ha subido ningún archivo' });
+        }
+
+        const doctor = await User.findOne({ 
+            _id: req.params.id, 
+            role: 'doctor' 
+        });
+
+        if (!doctor) {
+            // Eliminar archivo subido si el doctor no existe
+            fs.unlinkSync(req.file.path);
+            return res.status(404).json({ message: 'Doctor not found' });
+        }
+
+        // Eliminar foto anterior si existe
+        if (doctor.photo) {
+            const oldPhotoPath = path.join(__dirname, '../../uploads/photos', path.basename(doctor.photo));
+            if (fs.existsSync(oldPhotoPath)) {
+                fs.unlinkSync(oldPhotoPath);
+            }
+        }
+
+        // Actualizar doctor con nueva foto
+        const photoUrl = `/api/medicos/photo/${req.file.filename}`;
+        doctor.photo = photoUrl;
+        await doctor.save();
+
+        res.json({
+            message: 'Foto subida exitosamente',
+            photoUrl: photoUrl
+        });
+    } catch (err) {
+        // Eliminar archivo subido en caso de error
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
+        }
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Serve photo files
+router.get('/photo/:filename', (req, res) => {
+    try {
+        const filename = req.params.filename;
+        const photoPath = path.join(__dirname, '../../uploads/photos', filename);
+        
+        if (!fs.existsSync(photoPath)) {
+            return res.status(404).json({ message: 'Foto no encontrada' });
+        }
+
+        res.sendFile(photoPath);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Delete doctor photo
+router.delete('/:id/photo', protect, authorize('admin'), async (req, res) => {
+    try {
+        const doctor = await User.findOne({ 
+            _id: req.params.id, 
+            role: 'doctor' 
+        });
+
+        if (!doctor) {
+            return res.status(404).json({ message: 'Doctor not found' });
+        }
+
+        if (!doctor.photo) {
+            return res.status(400).json({ message: 'El doctor no tiene foto' });
+        }
+
+        // Eliminar archivo físico
+        const photoPath = path.join(__dirname, '../../uploads/photos', path.basename(doctor.photo));
+        if (fs.existsSync(photoPath)) {
+            fs.unlinkSync(photoPath);
+        }
+
+        // Actualizar doctor
+        doctor.photo = null;
+        await doctor.save();
+
+        res.json({ message: 'Foto eliminada exitosamente' });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
